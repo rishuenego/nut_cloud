@@ -739,9 +739,9 @@ const Checkout = () => {
                       <span>-{formatPrice(discountAmount)}</span>
                     </div>
                   )}
-                  <div className="flex justify-between text-green-600">
-                    <span>Free Shipping</span>
-                    <span>{formatPrice(shippingCharge)}</span>
+                  <div className="flex justify-between text-gray-600">
+                    <span>Shipping</span>
+                    <span>{shippingCharge === 0 ? <span className="text-green-600">FREE</span> : formatPrice(shippingCharge)}</span>
                   </div>
                   <div className="flex justify-between text-green-600">
                     <span>No Additional Charges</span>

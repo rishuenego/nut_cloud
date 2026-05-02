@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Link, useLocation } from 'react-router-dom';
+import { useNavigate, Link, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Eye, EyeOff, CheckCircle } from 'lucide-react';
 
@@ -9,6 +9,7 @@ const Login = () => {
   const { user, loading, login, needsPassword, setPassword } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const from = (location.state as { from?: string })?.from || '/';
   const [email, setEmail] = useState('');
   const [password, setPasswordValue] = useState('');
@@ -17,6 +18,16 @@ const Login = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Handle error from URL query params (e.g., from Google OAuth redirect)
+  useEffect(() => {
+    const errorParam = searchParams.get('error');
+    if (errorParam === 'auth_failed') {
+      setError('Google authentication failed. Please try again or use email login.');
+    } else if (errorParam === 'duplicate_email') {
+      setError('An account with this email already exists. Please login with your email and password.');
+    }
+  }, [searchParams]);
   
   // For Google users setting password
   const [newPassword, setNewPassword] = useState('');

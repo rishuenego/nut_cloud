@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { formatPrice, formatDate } from '../utils';
+import { API_URL } from '../services/api';
 
 const OrderTracking = () => {
   const location = useLocation();
@@ -23,7 +24,7 @@ const OrderTracking = () => {
 
   const fetchOrders = async () => {
     try {
-      const response = await fetch('/api/orders', {
+      const response = await fetch(`${API_URL}/orders`, {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include'
       });

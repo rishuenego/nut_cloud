@@ -176,6 +176,133 @@ export const sendForgotPasswordOTPEmail = async (email: string, otp: string, nam
 };
 
 /**
+ * Get status display text and color
+ */
+const getStatusInfo = (status: string) => {
+  const statusMap: Record<string, { text: string; color: string; emoji: string }> = {
+    pending: { text: 'Pending', color: '#EAB308', emoji: '⏳' },
+    confirmed: { text: 'Confirmed', color: '#3B82F6', emoji: '✅' },
+    processing: { text: 'Processing', color: '#8B5CF6', emoji: '🔄' },
+    shipped: { text: 'Shipped', color: '#6366F1', emoji: '📦' },
+    out_for_delivery: { text: 'Out for Delivery', color: '#F97316', emoji: '🚚' },
+    delivered: { text: 'Delivered', color: '#22C55E', emoji: '🎉' },
+    cancelled: { text: 'Cancelled', color: '#EF4444', emoji: '❌' },
+  };
+  return statusMap[status] || { text: status, color: '#6B7280', emoji: '📋' };
+};
+
+/**
+ * Send Order Status Update Email
+ */
+export const sendOrderStatusUpdateEmail = async (email: string, orderDetails: any, newStatus: string) => {
+  try {
+    const statusInfo = getStatusInfo(newStatus);
+    const itemsArray = typeof orderDetails.items === 'string' ? JSON.parse(orderDetails.items) : orderDetails.items;
+    
+    // Create items rows
+    const itemsList = Array.isArray(itemsArray) ? itemsArray.map((item: any) => `
+      <tr>
+        <td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">
+          <p style="margin: 0; font-weight: bold; font-size: 14px;">${item.name}</p>
+          <p style="margin: 3px 0 0 0; font-size: 11px; color: #6b7280;">Qty: ${item.quantity} | ${item.size || 'Standard'} | ${item.texture || 'Smooth'}</p>
+        </td>
+        <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; text-align: right; font-weight: bold; font-size: 14px;">Rs. ${item.price * item.quantity}</td>
+      </tr>
+    `).join('') : '';
+
+    const mailOptions = {
+      from: `"Nut Baba" <${process.env.MAIL_USER || process.env.SMTP_USER}>`,
+      to: email,
+      subject: `Order Update: Your order is now ${statusInfo.text} ${statusInfo.emoji}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #3D1B00; color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+            <h1 style="margin: 0; font-size: 24px;">NUT BABA</h1>
+            <p style="margin: 10px 0 0 0; opacity: 0.9;">Order Status Update</p>
+          </div>
+          
+          <div style="background-color: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px;">
+            <p style="font-size: 16px; color: #374151;">Hello!</p>
+            
+            <p style="font-size: 16px; color: #374151;">Your order <strong>${orderDetails.order_number || orderDetails.orderNumber}</strong> has been updated.</p>
+            
+            <div style="background-color: white; border-radius: 10px; padding: 20px; text-align: center; margin: 25px 0; border: 2px solid ${statusInfo.color};">
+              <p style="font-size: 14px; color: #6b7280; margin: 0 0 10px 0; text-transform: uppercase; letter-spacing: 1px;">Current Status</p>
+              <p style="font-size: 28px; font-weight: bold; color: ${statusInfo.color}; margin: 0;">${statusInfo.emoji} ${statusInfo.text}</p>
+            </div>
+            
+            ${newStatus === 'shipped' ? `
+            <div style="background-color: #EEF2FF; border-radius: 10px; padding: 15px; margin-bottom: 20px;">
+              <p style="margin: 0; font-size: 14px; color: #4338CA;"><strong>Your package is on its way!</strong> You will receive it within 3-5 business days.</p>
+            </div>
+            ` : ''}
+            
+            ${newStatus === 'out_for_delivery' ? `
+            <div style="background-color: #FFF7ED; border-radius: 10px; padding: 15px; margin-bottom: 20px;">
+              <p style="margin: 0; font-size: 14px; color: #C2410C;"><strong>Exciting!</strong> Your order is out for delivery and will arrive today.</p>
+            </div>
+            ` : ''}
+            
+            ${newStatus === 'delivered' ? `
+            <div style="background-color: #F0FDF4; border-radius: 10px; padding: 15px; margin-bottom: 20px;">
+              <p style="margin: 0; font-size: 14px; color: #166534;"><strong>Congratulations!</strong> Your order has been delivered. We hope you enjoy your purchase!</p>
+            </div>
+            ` : ''}
+            
+            ${newStatus === 'cancelled' ? `
+            <div style="background-color: #FEF2F2; border-radius: 10px; padding: 15px; margin-bottom: 20px;">
+              <p style="margin: 0; font-size: 14px; color: #B91C1C;"><strong>Order Cancelled:</strong> If you have any questions, please contact our support team.</p>
+            </div>
+            ` : ''}
+            
+            <h3 style="color: #3D1B00; margin-top: 30px; margin-bottom: 15px;">Order Details</h3>
+            <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; background-color: white; border-radius: 8px; overflow: hidden;">
+              <tbody>
+                ${itemsList}
+              </tbody>
+            </table>
+            
+            <div style="background-color: white; border-radius: 10px; padding: 15px; margin-top: 20px;">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                <span style="color: #6b7280;">Subtotal:</span>
+                <span style="font-weight: bold;">Rs. ${orderDetails.subtotal}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                <span style="color: #6b7280;">Shipping:</span>
+                <span style="font-weight: bold;">Rs. ${orderDetails.shipping_charge !== undefined ? orderDetails.shipping_charge : orderDetails.shippingCharge}</span>
+              </div>
+              ${(orderDetails.discount_amount > 0 || orderDetails.discountAmount > 0) ? `
+              <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                <span style="color: #22C55E;">Discount:</span>
+                <span style="font-weight: bold; color: #22C55E;">-Rs. ${orderDetails.discount_amount || orderDetails.discountAmount}</span>
+              </div>
+              ` : ''}
+              <div style="border-top: 2px solid #3D1B00; padding-top: 10px; margin-top: 10px; display: flex; justify-content: space-between;">
+                <span style="font-weight: bold; font-size: 16px;">Total:</span>
+                <span style="font-weight: bold; font-size: 16px; color: #C45C26;">Rs. ${orderDetails.total_amount || orderDetails.totalAmount}</span>
+              </div>
+            </div>
+            
+            <p style="text-align: center; margin-top: 30px;">
+              <a href="https://nutbaba.in/orders" style="background-color: #C45C26; color: white; padding: 12px 25px; text-decoration: none; border-radius: 50px; font-weight: bold;">Track Your Order</a>
+            </p>
+
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 25px 0;" />
+            <p style="font-size: 12px; color: #9ca3af; text-align: center;">Thank you for shopping with Nut Baba!</p>
+          </div>
+        </div>
+      `,
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log("Order status update email sent:", info.messageId);
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error("Error sending order status update email:", error);
+  }
+};
+
+/**
  * Send Order Confirmation Email
  */
 export const sendOrderConfirmationEmail = async (email: string, orderDetails: any) => {

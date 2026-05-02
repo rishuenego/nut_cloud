@@ -3,6 +3,7 @@ const { Router } = express
 import path from 'path'
 import { getMany, getOne, execute } from '../config/db.js'
 import { isAdmin, type AdminRequest, generateAdminToken, removeAdminToken, validateAdminToken } from '../middleware/adminAuth.js'
+import { sendOrderStatusUpdateEmail } from '../utils/mail.js'
 
 const router = Router()
 
@@ -412,6 +413,23 @@ router.put('/orders/:id/status', isAdmin, async (req, res) => {
     const { id } = req.params
     const { status, trackingNumber } = req.body
 
+    // Get the order before updating to check current status and get email
+    const existingOrder = await getOne<{
+      id: number
+      order_number: string
+      items: string
+      subtotal: number
+      discount_amount: number
+      shipping_charge: number
+      total_amount: number
+      order_status: string
+      shipping_address: string
+    }>('SELECT * FROM orders WHERE id = ?', [id])
+
+    if (!existingOrder) {
+      return res.status(404).json({ success: false, message: 'Order not found' })
+    }
+
     let sql = 'UPDATE orders SET order_status = ?, updated_at = NOW()'
     const params: unknown[] = [status]
 
@@ -428,6 +446,22 @@ router.put('/orders/:id/status', isAdmin, async (req, res) => {
     params.push(id)
 
     await execute(sql, params)
+
+    // Send email notification if status actually changed
+    if (existingOrder.order_status !== status) {
+      try {
+        const shippingAddress = typeof existingOrder.shipping_address === 'string' 
+          ? JSON.parse(existingOrder.shipping_address) 
+          : existingOrder.shipping_address
+        
+        if (shippingAddress?.email) {
+          await sendOrderStatusUpdateEmail(shippingAddress.email, existingOrder, status)
+        }
+      } catch (emailError) {
+        console.error('Failed to send order status update email:', emailError)
+        // Don't fail the request if email fails
+      }
+    }
 
     res.json({ success: true, message: 'Order status updated successfully' })
   } catch (error) {

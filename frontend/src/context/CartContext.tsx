@@ -1,5 +1,7 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react'
 import { CartItem, Product } from '../types'
+import { useAuth } from './AuthContext'
+import { API_URL } from '../services/api'
 
 interface CartContextType {
   items: CartItem[]
@@ -16,6 +18,7 @@ interface CartContextType {
     freeShippingThreshold: number;
     shippingCharge: number;
   }
+  refreshShippingConfig: () => Promise<void>
 }
 
 interface AppliedCoupon {
@@ -28,44 +31,89 @@ interface AppliedCoupon {
 
 const CartContext = createContext<CartContextType | undefined>(undefined)
 
+// Helper to get storage key based on user
+const getCartStorageKey = (userId: number | null) => {
+  return userId ? `cart_user_${userId}` : 'cart_guest'
+}
+
+const getCouponStorageKey = (userId: number | null) => {
+  return userId ? `coupon_user_${userId}` : 'coupon_guest'
+}
+
 export function CartProvider({ children }: { children: ReactNode }) {
-  const [items, setItems] = useState<CartItem[]>(() => {
-    const saved = localStorage.getItem('cart')
-    return saved ? JSON.parse(saved) : []
-  })
-  const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(() => {
-    const saved = localStorage.getItem('appliedCoupon')
-    return saved ? JSON.parse(saved) : null
-  })
+  const { user, isLoading: authLoading } = useAuth()
+  
+  const [items, setItems] = useState<CartItem[]>([])
+  const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null)
+  const [isInitialized, setIsInitialized] = useState(false)
 
   const [shippingConfig, setShippingConfig] = useState({
     freeShippingThreshold: 499,
     shippingCharge: 49,
   })
 
-  // Fetch settings once on mount
-  useEffect(() => {
-    const fetchSettings = async () => {
-      try {
-        const response = await fetch('/settings', { credentials: 'include' })
-        if (response.ok) {
-          const data = await response.json()
-          if (data.success && data.settings) {
-            setShippingConfig({
-              freeShippingThreshold: data.settings.freeShippingThreshold,
-              shippingCharge: data.settings.shippingCharge,
-            })
-          }
+  // Fetch shipping settings
+  const fetchShippingSettings = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_URL}/settings`, { credentials: 'include' })
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && data.settings) {
+          setShippingConfig({
+            freeShippingThreshold: data.settings.freeShippingThreshold,
+            shippingCharge: data.settings.shippingCharge,
+          })
         }
-      } catch (error) {
-        console.error('Failed to fetch shipping settings:', error)
       }
+    } catch (error) {
+      console.error('Failed to fetch shipping settings:', error)
     }
-    fetchSettings()
   }, [])
 
+  // Fetch settings on mount and expose refresh function
   useEffect(() => {
-    localStorage.setItem('cart', JSON.stringify(items))
+    fetchShippingSettings()
+  }, [fetchShippingSettings])
+
+  // Load cart data when user changes (login/logout)
+  useEffect(() => {
+    if (authLoading) return
+
+    const userId = user?.id || null
+    const cartKey = getCartStorageKey(userId)
+    const couponKey = getCouponStorageKey(userId)
+
+    // Migrate from old 'cart' and 'appliedCoupon' keys if they exist
+    const oldCart = localStorage.getItem('cart')
+    const oldCoupon = localStorage.getItem('appliedCoupon')
+    if (oldCart || oldCoupon) {
+      // Remove old keys after reading
+      localStorage.removeItem('cart')
+      localStorage.removeItem('appliedCoupon')
+    }
+
+    // Load user-specific cart
+    const savedCart = localStorage.getItem(cartKey)
+    const savedCoupon = localStorage.getItem(couponKey)
+
+    setItems(savedCart ? JSON.parse(savedCart) : [])
+    setAppliedCoupon(savedCoupon ? JSON.parse(savedCoupon) : null)
+    setIsInitialized(true)
+
+    // Clear guest cart when user logs in
+    if (user) {
+      localStorage.removeItem('cart_guest')
+      localStorage.removeItem('coupon_guest')
+    }
+  }, [user, authLoading])
+
+  // Save cart to user-specific storage when items change
+  useEffect(() => {
+    if (!isInitialized) return
+
+    const userId = user?.id || null
+    const cartKey = getCartStorageKey(userId)
+    localStorage.setItem(cartKey, JSON.stringify(items))
 
     // Auto-remove coupon if subtotal falls below minimum
     if (appliedCoupon && appliedCoupon.minOrderAmount) {
@@ -82,15 +130,21 @@ export function CartProvider({ children }: { children: ReactNode }) {
         setAppliedCoupon(null)
       }
     }
-  }, [items, appliedCoupon])
+  }, [items, appliedCoupon, user, isInitialized])
 
+  // Save coupon to user-specific storage when coupon changes
   useEffect(() => {
+    if (!isInitialized) return
+
+    const userId = user?.id || null
+    const couponKey = getCouponStorageKey(userId)
+
     if (appliedCoupon) {
-      localStorage.setItem('appliedCoupon', JSON.stringify(appliedCoupon))
+      localStorage.setItem(couponKey, JSON.stringify(appliedCoupon))
     } else {
-      localStorage.removeItem('appliedCoupon')
+      localStorage.removeItem(couponKey)
     }
-  }, [appliedCoupon])
+  }, [appliedCoupon, user, isInitialized])
 
   const addToCart = (product: Product, quantity: number, weight: string, texture: string) => {
     setItems(prevItems => {
@@ -142,6 +196,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const clearCart = () => {
     setItems([])
     setAppliedCoupon(null)
+    // Also clear from storage
+    const userId = user?.id || null
+    const cartKey = getCartStorageKey(userId)
+    const couponKey = getCouponStorageKey(userId)
+    localStorage.removeItem(cartKey)
+    localStorage.removeItem(couponKey)
   }
 
   const getCartTotal = () => {
@@ -183,6 +243,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         applyCoupon,
         removeCoupon,
         shippingConfig,
+        refreshShippingConfig: fetchShippingSettings,
       }}
     >
       {children}
