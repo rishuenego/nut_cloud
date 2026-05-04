@@ -3,22 +3,22 @@ import { Link } from 'react-router-dom'
 const blogPosts = [
   {
     id: 1,
-    title: '5 Delicous smoothies with Peanut butter',
-    date: '5 March 20026',
+    title: '5 Delicious Smoothies with Peanut Butter',
+    date: '5 March 2026',
     image: '/images/blog -1.webp',
     slug: 'smoothies-with-peanut-butter',
   },
   {
     id: 2,
-    title: 'Benifits of Eating Peanut Butter',
-    date: '6 March 20026',
+    title: 'Benefits of Eating Peanut Butter',
+    date: '6 March 2026',
     image: '/images/blog -2.webp',
     slug: 'benefits-of-peanut-butter',
   },
   {
     id: 3,
-    title: 'How to choose Right Peanut Butter',
-    date: '7 March 20026',
+    title: 'How to Choose the Right Peanut Butter',
+    date: '7 March 2026',
     image: '/images/blog - 3.webp',
     slug: 'choose-right-peanut-butter',
   },
@@ -59,7 +59,7 @@ export default function BlogSection() {
                   to={`/blog/${post.slug}`}
                   className="group flex flex-col"
                 >
-                  <div className="relative aspect-square rounded-[15px] overflow-hidden mb-4 shadow-sm">
+                  <div className="relative aspect-[3/4] rounded-[15px] overflow-hidden mb-4 shadow-sm">
                     <img
                       src={post.image}
                       alt={post.title}
