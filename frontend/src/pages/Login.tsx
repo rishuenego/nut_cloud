@@ -24,8 +24,16 @@ const Login = () => {
     const errorParam = searchParams.get('error');
     if (errorParam === 'auth_failed') {
       setError('Google authentication failed. Please try again or use email login.');
+    } else if (errorParam === 'account_exists') {
+      setError('An account with this email already exists. Please login with your email and password instead.');
     } else if (errorParam === 'duplicate_email') {
       setError('An account with this email already exists. Please login with your email and password.');
+    }
+    
+    // Clear the error param from URL after showing
+    if (errorParam) {
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, '', newUrl);
     }
   }, [searchParams]);
   

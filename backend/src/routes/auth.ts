@@ -175,15 +175,36 @@ router.get('/google', passport.authenticate('google', {
 }))
 
 // Google OAuth callback
-router.get('/google/callback',
-  passport.authenticate('google', {
-    failureRedirect: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/login?error=auth_failed`,
-  }),
-  (req, res) => {
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173'
-    res.redirect(frontendUrl)
-  }
-)
+router.get('/google/callback', (req, res, next) => {
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173'
+  
+  passport.authenticate('google', (err: Error | null, user: User | false, info: { message?: string } | undefined) => {
+    if (err) {
+      console.error('Google OAuth error:', err)
+      return res.redirect(`${frontendUrl}/login?error=auth_failed`)
+    }
+    
+    // Check if authentication failed due to existing account
+    if (!user && info?.message === 'account_exists') {
+      return res.redirect(`${frontendUrl}/login?error=account_exists`)
+    }
+    
+    if (!user) {
+      return res.redirect(`${frontendUrl}/login?error=auth_failed`)
+    }
+    
+    // Log in the user
+    req.login(user, (loginErr) => {
+      if (loginErr) {
+        console.error('Login error after Google auth:', loginErr)
+        return res.redirect(`${frontendUrl}/login?error=auth_failed`)
+      }
+      
+      // Redirect to frontend
+      res.redirect(frontendUrl)
+    })
+  })(req, res, next)
+})
 
 // Get current user
 router.get('/me', (req: Request, res) => {

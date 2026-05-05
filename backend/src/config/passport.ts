@@ -38,14 +38,19 @@ export function configurePassport(passport: PassportStatic) {
             const googleEmail = rawEmail ? rawEmail.toLowerCase() : null
             const googleId = profile.id
 
-            // 1. Try to find user by google_id first
+            // 1. Try to find user by google_id first (returning Google user)
             let user = await getOne<User>(
               'SELECT * FROM users WHERE google_id = ?',
               [googleId]
             )
 
-            if (!user && googleEmail) {
-              // 2. Check if a user already exists with this email (registered via email/password)
+            if (user) {
+              // User already has Google linked, allow login
+              return done(null, user)
+            }
+
+            if (googleEmail) {
+              // 2. Check if a user already exists with this email
               const existingUser = await getOne<User>(
                 'SELECT * FROM users WHERE LOWER(email) = ?',
                 [googleEmail]
@@ -54,51 +59,51 @@ export function configurePassport(passport: PassportStatic) {
               if (existingUser) {
                 // Check if this user has a password (registered via email/password)
                 if (existingUser.password && !existingUser.google_id) {
-                  // User registered with email/password - link Google account to existing account
+                  // User registered with email/password - DO NOT allow Google login
+                  // Return error to redirect to login page with message
+                  return done(null, false, { message: 'account_exists' })
+                } else if (existingUser.google_id) {
+                  // User already has a Google ID linked (same or different)
+                  // This means they registered with Google before
+                  return done(null, existingUser)
+                } else {
+                  // User exists but no password and no google_id (shouldn't happen normally)
+                  // Link Google account to this user
                   await execute(
                     'UPDATE users SET google_id = ?, updated_at = NOW() WHERE id = ?',
                     [googleId, existingUser.id]
                   )
-                  // Re-fetch to get updated record
                   user = await getOne<User>('SELECT * FROM users WHERE id = ?', [existingUser.id])
-                } else if (existingUser.google_id && existingUser.google_id !== googleId) {
-                  // This email is linked to a different Google account - this shouldn't happen normally
-                  console.warn(`User ${existingUser.id} has a different google_id linked. Email: ${googleEmail}`)
-                  // Allow login with the existing account
-                  user = existingUser
-                } else {
-                  // User already has this Google ID or no password (pure Google user)
-                  user = existingUser
+                  return done(null, user || false)
                 }
               }
             }
 
-            if (!user) {
-              // 3. No existing account at all — create a new one
-              try {
-                const result = await execute(
-                  `INSERT INTO users (google_id, email, name, created_at, updated_at)
-                   VALUES (?, ?, ?, NOW(), NOW())`,
-                  [googleId, googleEmail, profile.displayName]
+            // 3. No existing account at all — create a new one (NEW Google user)
+            try {
+              const result = await execute(
+                `INSERT INTO users (google_id, email, name, created_at, updated_at)
+                 VALUES (?, ?, ?, NOW(), NOW())`,
+                [googleId, googleEmail, profile.displayName]
+              )
+
+              user = await getOne<User>('SELECT * FROM users WHERE id = ?', [
+                result.insertId,
+              ])
+              
+              return done(null, user || false)
+            } catch (insertError: any) {
+              // Handle rare race condition where user was created between our check and insert
+              if (insertError.code === 'ER_DUP_ENTRY') {
+                user = await getOne<User>(
+                  'SELECT * FROM users WHERE google_id = ? OR LOWER(email) = ?',
+                  [googleId, googleEmail]
                 )
-
-                user = await getOne<User>('SELECT * FROM users WHERE id = ?', [
-                  result.insertId,
-                ])
-              } catch (insertError: any) {
-                // Handle rare race condition where user was created between our check and insert
-                if (insertError.code === 'ER_DUP_ENTRY') {
-                  user = await getOne<User>(
-                    'SELECT * FROM users WHERE google_id = ? OR LOWER(email) = ?',
-                    [googleId, googleEmail]
-                  )
-                } else {
-                  throw insertError
-                }
+                return done(null, user || false)
+              } else {
+                throw insertError
               }
             }
-
-            return done(null, user || false)
           } catch (error) {
             console.error('Passport Google Strategy Error:', error)
             return done(error as Error)
