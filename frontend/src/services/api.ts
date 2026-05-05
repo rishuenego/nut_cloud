@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-export const API_URL = import.meta.env.VITE_API_URL || 'https://nutbaba.in/api';
+export const API_URL = import.meta.env.VITE_API_URL || 'https://api.nutbaba.in';
 
 const api = axios.create({
   baseURL: API_URL,
