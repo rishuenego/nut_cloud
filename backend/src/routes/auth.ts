@@ -209,6 +209,12 @@ router.get('/google/callback', (req, res, next) => {
         return res.redirect(`${frontendUrl}/login?error=auth_failed`)
       }
       
+      // Check if user needs to set password (new Google user without password)
+      if (user.google_id && !user.password) {
+        console.log('[v0] New Google user needs password, redirecting to setup')
+        return res.redirect(`${frontendUrl}/login?setup_password=true`)
+      }
+      
       console.log('[v0] Google login successful, redirecting to frontend')
       // Redirect to frontend
       res.redirect(frontendUrl)

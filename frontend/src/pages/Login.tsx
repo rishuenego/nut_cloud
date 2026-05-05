@@ -19,9 +19,11 @@ const Login = () => {
   const [success, setSuccess] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Handle error from URL query params (e.g., from Google OAuth redirect)
+  // Handle error and setup_password from URL query params (e.g., from Google OAuth redirect)
   useEffect(() => {
     const errorParam = searchParams.get('error');
+    const setupPassword = searchParams.get('setup_password');
+    
     if (errorParam === 'auth_failed') {
       setError('Google authentication failed. Please try again or use email login.');
     } else if (errorParam === 'account_exists') {
@@ -30,8 +32,8 @@ const Login = () => {
       setError('An account with this email already exists. Please login with your email and password.');
     }
     
-    // Clear the error param from URL after showing
-    if (errorParam) {
+    // Clear the params from URL after processing
+    if (errorParam || setupPassword) {
       const newUrl = window.location.pathname;
       window.history.replaceState({}, '', newUrl);
     }
