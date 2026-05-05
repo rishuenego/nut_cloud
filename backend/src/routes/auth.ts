@@ -178,27 +178,18 @@ router.get('/google', passport.authenticate('google', {
 router.get('/google/callback', (req, res, next) => {
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173'
   
-  passport.authenticate('google', (err: any, user: User | false, info: any) => {
-    console.log('[v0] Google callback - err:', err?.message || err, 'user:', user ? 'exists' : 'null', 'info:', info)
-    
-    // Check if error is our custom ACCOUNT_EXISTS error
-    if (err && (err.code === 'ACCOUNT_EXISTS' || err.message === 'ACCOUNT_EXISTS')) {
-      console.log('[v0] Account exists error detected, redirecting to login page')
-      return res.redirect(`${frontendUrl}/login?error=account_exists`)
-    }
-    
+  passport.authenticate('google', (err: Error | null, user: User | false, info: { message?: string } | undefined) => {
     if (err) {
       console.error('Google OAuth error:', err)
       return res.redirect(`${frontendUrl}/login?error=auth_failed`)
     }
     
-    // Check if authentication failed due to existing account (fallback check via info)
+    // Check if authentication failed due to existing account
+    if (!user && info?.message === 'account_exists') {
+      return res.redirect(`${frontendUrl}/login?error=account_exists`)
+    }
+    
     if (!user) {
-      if (info && info.message === 'account_exists') {
-        console.log('[v0] Redirecting to login with account_exists error (via info)')
-        return res.redirect(`${frontendUrl}/login?error=account_exists`)
-      }
-      console.log('[v0] No user, redirecting to auth_failed')
       return res.redirect(`${frontendUrl}/login?error=auth_failed`)
     }
     
@@ -209,7 +200,6 @@ router.get('/google/callback', (req, res, next) => {
         return res.redirect(`${frontendUrl}/login?error=auth_failed`)
       }
       
-      console.log('[v0] Google login successful, redirecting to frontend')
       // Redirect to frontend
       res.redirect(frontendUrl)
     })

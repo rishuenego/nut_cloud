@@ -60,11 +60,8 @@ export function configurePassport(passport: PassportStatic) {
                 // Check if this user has a password (registered via email/password)
                 if (existingUser.password && !existingUser.google_id) {
                   // User registered with email/password - DO NOT allow Google login
-                  // Pass custom error that will be caught in callback
-                  console.log('[v0] Account exists with password, rejecting Google login for:', googleEmail)
-                  const accountExistsError = new Error('ACCOUNT_EXISTS') as any
-                  accountExistsError.code = 'ACCOUNT_EXISTS'
-                  return done(accountExistsError)
+                  // Return error to redirect to login page with message
+                  return done(null, false, { message: 'account_exists' })
                 } else if (existingUser.google_id) {
                   // User already has a Google ID linked (same or different)
                   // This means they registered with Google before
