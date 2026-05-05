@@ -28,8 +28,8 @@ export function configurePassport(passport: PassportStatic) {
           clientSecret: process.env.GOOGLE_CLIENT_SECRET,
           callbackURL: process.env.GOOGLE_CALLBACK_URL ||
             (process.env.NODE_ENV === 'production' || process.env.RENDER
-              ? 'https://api.nutbaba.in/auth/google/callback'
-              : `http://localhost:${process.env.PORT || 5000}/auth/google/callback`),
+              ? 'https://nutbaba.in/api/auth/google/callback'
+              : `http://localhost:${process.env.PORT || 5000}/api/auth/google/callback`),
           passReqToCallback: true,
         },
         async (req, accessToken, refreshToken, profile, done) => {
